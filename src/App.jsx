@@ -1,5 +1,4 @@
 
-
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -87,6 +86,12 @@ export default function App() {
   const [sending, setSending] = useState(false);
   const [formMessage, setFormMessage] = useState("");
   const [formSuccess, setFormSuccess] = useState(false);
+  const [email, setEmail] = useState("");
+const [otp, setOtp] = useState("");
+const [sendingOtp, setSendingOtp] = useState(false);
+const [verifyingOtp, setVerifyingOtp] = useState(false);
+const [emailVerified, setEmailVerified] = useState(false);
+const [verificationToken, setVerificationToken] = useState("");
   
   const [selectedImage, setSelectedImage] = useState(null);
   const [zoom, setZoom] = useState(1);
@@ -169,6 +174,30 @@ export default function App() {
         });
       }
 
+      // Animate project cards as they enter the viewport on phones and tablets.
+      // On mobile, the project gallery remains swipeable instead of being pinned.
+      if (window.matchMedia("(max-width: 767px)").matches) {
+        gsap.utils.toArray(".project-card").forEach((card, index) => {
+          gsap.fromTo(
+            card,
+            { y: 36, autoAlpha: 0, scale: 0.97 },
+            {
+              y: 0,
+              autoAlpha: 1,
+              scale: 1,
+              duration: 0.7,
+              delay: (index % 2) * 0.06,
+              ease: "power3.out",
+              scrollTrigger: {
+                trigger: card,
+                start: "top 92%",
+                once: true,
+              },
+            }
+          );
+        });
+      }
+
       gsap.from(".hero-orbit", {
         rotation: -30,
         scale: 0.7,
@@ -188,6 +217,91 @@ export default function App() {
     };
   }, []);
 
+
+
+const API_URL = "http://localhost:5000";
+
+async function handleSendOtp() {
+  if (!email.trim()) {
+    setFormMessage("Please enter your email first.");
+    setFormSuccess(false);
+    return;
+  }
+
+  try {
+    setSendingOtp(true);
+    setFormMessage("");
+
+    const response = await fetch(API_URL + "/api/send-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim() }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "OTP could not be sent.");
+    }
+
+    setOtp("");
+    setEmailVerified(false);
+    setVerificationToken("");
+    setFormMessage("OTP sent! Please check your email.");
+    setFormSuccess(true);
+  } catch (error) {
+    setFormMessage(error.message);
+    setFormSuccess(false);
+  } finally {
+    setSendingOtp(false);
+  }
+}
+
+async function handleVerifyOtp() {
+  if (otp.length !== 6) {
+    setFormMessage("Please enter the 6-digit OTP.");
+    setFormSuccess(false);
+    return;
+  }
+
+  try {
+    setVerifyingOtp(true);
+    setFormMessage("");
+
+    const response = await fetch(API_URL + "/api/verify-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: email.trim(),
+        otp: otp.trim(),
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "OTP verification failed.");
+    }
+
+    if (!data.verificationToken) {
+      throw new Error("Verification token was not returned by the server.");
+    }
+
+    setVerificationToken(data.verificationToken);
+    setEmailVerified(true);
+    setFormMessage("Email verified successfully!");
+    setFormSuccess(true);
+  } catch (error) {
+    setEmailVerified(false);
+    setVerificationToken("");
+    setFormMessage(error.message);
+    setFormSuccess(false);
+  } finally {
+    setVerifyingOtp(false);
+  }
+}
+
+
   async function handleSubmit(event) {
     event.preventDefault();
     setSending(true);
@@ -197,12 +311,14 @@ export default function App() {
     const form = event.currentTarget;
     const data = new FormData(form);
 
+    
     const payload = {
-      name: String(data.get("name") || "").trim(),
-      email: String(data.get("email") || "").trim(),
-      phone: String(data.get("phone") || "").trim(),
-      message: String(data.get("message") || "").trim(),
-    };
+  name: String(data.get("name") || "").trim(),
+  email: String(data.get("email") || "").trim(),
+  phone: String(data.get("phone") || "").trim(),
+  message: String(data.get("message") || "").trim(),
+  verificationToken: verificationToken,
+};
 
     try {
       const response = await fetch(
@@ -220,9 +336,25 @@ export default function App() {
         throw new Error(result.message || "Unable to send your message.");
       }
 
-      setFormSuccess(true);
-      setFormMessage("Thank you! Your enquiry has been sent successfully.");
-      form.reset();
+
+
+setFormSuccess(true);
+setFormMessage("Thank you! Your enquiry has been sent successfully.");
+
+form.reset();
+
+// Reset email and OTP verification
+setEmail("");
+setOtp("");
+setEmailVerified(false);
+setVerificationToken("");
+
+// Hide the thank-you message after 4 seconds
+setTimeout(() => {
+  setFormMessage("");
+  setFormSuccess(false);
+}, 4000);
+
     } catch (error) {
       setFormSuccess(false);
       setFormMessage(
@@ -240,25 +372,33 @@ export default function App() {
     <div className="min-h-screen overflow-x-clip bg-[#171816] text-[#f2f0e9]">
       {/* Navigation */}
       <header className="site-nav">
-        <a href="#home" className="brand" onClick={closeMenu}>
-          
-      <div className="brand-mark">
-      <img
-       src="/images/AE_logo.jpeg"
-       alt="Alpha Engineering Logo"
-        className="h-full w-full object-contain"
-        />
-       </div>
+       <a
+  href="#home"
+  className="brand"
+  onClick={(event) => {
+    closeMenu();
+    event.preventDefault();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }}
+>
+  <div className="brand-mark brand-mark-large">
+    <img
+      src="/images/AE_logo.jpeg"
+      alt="Alpha Engineering Logo"
+      className="h-full w-full object-contain"
+    />
+  </div>
 
-          <span>
-            <span className="block text-[13px] font-semibold tracking-[0.14em]">
-              ALPHA ENGINEERING
-            </span>
-            <span className="mt-0.5 block text-[9px] tracking-[0.28em] text-white/50">
-              ENGINEERING .3D MODELING .DETAILING
-            </span>
-          </span>
-        </a>
+  {/* Company name and tagline */}
+  <span className="brand-text hidden md:block">
+    <span className="block text-[13px] font-semibold tracking-[0.14em]">
+      ALPHA ENGINEERING
+    </span>
+    <span className="mt-0.5 block text-[9px] tracking-[0.28em] text-white/50">
+      ENGINEERING .3D MODELING .DETAILING
+    </span>
+  </span>
+</a>
 
         <nav className={`nav-links ${menuOpen ? "nav-open" : ""}`}>
          
@@ -267,8 +407,8 @@ export default function App() {
              ["Home", "#home"],
              ["About", "#about"],
              ["Services", "#services"],
-             ["Selected Work", "#work"],
-             ["Contact", "#contact"],
+             ["Projects", "#work"],
+             ["Contact Us", "#contact"],
              ].map(([label, href]) => (
              <a key={label} href={href} onClick={closeMenu}>
             {label}
@@ -344,8 +484,8 @@ export default function App() {
           <div className="hero-visual">
             <div className="hero-image">
               <img
-                src="https://plus.unsplash.com/premium_photo-1694475284907-db935063756f?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=NHwxMjA3fDA%3D"
-                alt="Contemporary architectural structure"
+                src="https://images.unsplash.com/photo-1493476523860-a6de6ce1b0c3?q=80&w=1169&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=NHwxMjA3fDA%3D"
+                alt="Alpha Engineering structural project"
               />
               <div className="image-shade" />
               <div className="image-caption">
@@ -490,10 +630,10 @@ export default function App() {
   </Reveal>
 
   <Reveal>
-    <h2 className="section-heading max-w-[850px]">
-      Clear thinking.{" "}
-      <span className="accent-text">Solid solutions.</span>
-    </h2>
+    <h2 className="section-heading max-w-[850px] [word-spacing:5px] leading-[1.2] tracking-[-0.03em]">
+  Clear thinking.{" "}
+  <span className="accent-text">Solid solutions.</span>
+</h2>
   </Reveal>
 
   {/* Compact services list */}
@@ -560,14 +700,15 @@ export default function App() {
 >
   <div className="work-heading section-wrap">
     <div className="section-kicker">
-      <span>03 / SELECTED WORK</span>
+      <span>03 / PROJECTS</span>
       <span>CONCEPT · DETAIL · EXECUTION</span>
     </div>
 
     <div className="work-title-row">
-      <h2 className="section-heading">
-        Ideas made <span className="accent-text">tangible.</span>
-      </h2>
+      
+      <h2 className="section-heading [word-spacing:5px] leading-[1.2] tracking-[-0.03em]">
+  Ideas made <span className="accent-text">tangible.</span>
+</h2>
 
       <p className="work-instruction">
         <ArrowRight size={15} />
@@ -967,9 +1108,11 @@ export default function App() {
 
           <div className="contact-grid">
             <Reveal className="contact-intro">
-              <h2 className="section-heading">
-                Have a vision? <span className="accent-text">Let's build it.</span>
-              </h2>
+              
+<h2 className="section-heading [word-spacing:5px] leading-[1.2] tracking-[-0.03em]">
+  Have a vision? <span className="accent-text">Let's build it.</span>
+</h2>
+
               <p>
                 Tell us a little about your project. We would love to hear
                 what you are planning.
@@ -1002,15 +1145,69 @@ export default function App() {
                   </label>
                   <label>
                     EMAIL ADDRESS
+                    
                     <input
-                      type="email"
-                      name="email"
-                      placeholder="you@example.com"
-                      maxLength={254}
-                      autoComplete="email"
-                      required
-                    />
+  type="email"
+  name="email"
+  placeholder="you@example.com"
+  maxLength={254}
+  autoComplete="email"
+  value={email}
+  onChange={(event) => {
+    setEmail(event.target.value);
+    setOtp("");
+    setEmailVerified(false);
+    setVerificationToken("");
+    setFormMessage("");
+  }}
+  required
+/>
                   </label>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+  <button
+    type="button"
+    onClick={handleSendOtp}
+    disabled={sendingOtp || emailVerified}
+    className="rounded-md bg-orange-500 px-5 py-3 text-sm font-semibold text-black hover:bg-orange-400 disabled:opacity-50"
+  >
+    {sendingOtp ? "Sending OTP..." : "Send OTP"}
+  </button>
+
+  {emailVerified && (
+    <span className="flex items-center gap-2 text-sm text-green-400">
+      <CheckCircle2 size={16} />
+      Email Verified
+    </span>
+  )}
+</div>
+
+{!emailVerified && (
+  <div className="mt-4 flex flex-wrap items-end gap-3">
+    <label className="min-w-0 flex-1">
+      ENTER 6-DIGIT OTP
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder="Enter OTP"
+        value={otp}
+        maxLength={6}
+        onChange={(event) =>
+          setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
+        }
+        className="mt-2 w-full rounded-md border border-white/20 bg-white px-3 py-3 text-black"
+      />
+    </label>
+
+    <button
+      type="button"
+      onClick={handleVerifyOtp}
+      disabled={verifyingOtp || otp.length !== 6}
+      className="rounded-md bg-orange-500 px-5 py-3 text-sm font-semibold text-black hover:bg-orange-400 disabled:opacity-50"
+    >
+      {verifyingOtp ? "Verifying..." : "Verify OTP"}
+    </button>
+  </div>
+)}
                 </div>
 
                 <label>
@@ -1039,7 +1236,7 @@ export default function App() {
                 <button
                   type="submit"
                   className="button-primary submit-button"
-                  disabled={sending}
+                 disabled={sending || !emailVerified || !verificationToken}
                 >
                   {sending ? (
                     <>
@@ -1071,8 +1268,12 @@ export default function App() {
         {/* Footer */}
         <footer className="site-footer section-wrap">
           <a href="#home" className="brand footer-brand">
-            <span className="brand-mark">
-              <Building2 size={18} />
+            <span className="brand-mark footer-brand-mark">
+              <img
+                src="/images/AE_logo.jpeg"
+                alt="Alpha Engineering Logo"
+                className="h-full w-full object-contain"
+              />
             </span>
             <span>
               <span className="block text-[12px] font-semibold tracking-[0.14em]">
@@ -1087,7 +1288,14 @@ export default function App() {
           <span className="footer-note">
             BUILT ON PRECISION. DESIGNED FOR THE FUTURE.
           </span>
-          <a href="#home" className="back-top">
+          <a
+            href="#home"
+            className="back-top"
+            onClick={(event) => {
+              event.preventDefault();
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          >
             BACK TO TOP ↑
           </a>
           <span className="copyright">
@@ -1098,3 +1306,16 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
